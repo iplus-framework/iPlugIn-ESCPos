@@ -1,5 +1,4 @@
-﻿using static ESCPOS.Commands;
-using ESCPOS;
+﻿using ESCPOS;
 using ESCPOS.Utils;
 using System.Text;
 using gip.core.reporthandler;

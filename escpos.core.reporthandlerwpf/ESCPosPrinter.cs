@@ -1,5 +1,5 @@
 ﻿using gip.core.datamodel;
-using gip.core.reporthandler.Flowdoc;
+using gip.core.reporthandlerwpf.Flowdoc;
 using System.Windows.Documents;
 using System;
 using System.Threading;
@@ -7,11 +7,12 @@ using ESCPOS;
 using ESCPOS.Utils;
 using System.Windows;
 using gip.core.reporthandler;
+using gip.core.reporthandlerwpf;
 
 namespace escpos.core.reporthandlerwpf
 {
-    [ACClassInfo(Const.PackName_VarioSystem, "en{'ESCPosPrinter'}de{'ESCPosPrinter'}", Global.ACKinds.TPABGModule, Global.ACStorableTypes.Required, false, false)]
-    public class ESCPosPrinter : ACPrintServerBase
+    [ACClassInfo(Const.PackName_VarioSystem, "en{'ESCPos Printer'}de{'ESCPos Printer'}", Global.ACKinds.TPABGModule, Global.ACStorableTypes.Required, false, false)]
+    public class ESCPosPrinter : ACPrintServerBaseWPF
     {
 
         #region ctor's
@@ -119,14 +120,7 @@ namespace escpos.core.reporthandlerwpf
             {
                 try
                 {
-                    //Console.WriteLine("Print ...");
                     bytes = bytes.Add(Commands.FullPaperCut);
-                    //#region Test
-                    //Random random = new Random();
-                    //int rndNr = random.Next(1, 20);
-                    //string filePath = string.Format(@"c:\VarioData\_temp\ECS-{0}-{1}.by", DateTime.Now.ToString("yyyy-mm-dd_HH-mm"), rndNr);
-                    //System.IO.File.WriteAllBytes(filePath, bytes);
-                    //#endregion
                     bytes.Print(string.Format("{0}:{1}", IPAddress, Port));
                     if (IsAlarmActive(IsConnected) != null)
                         AcknowledgeAlarms();
@@ -180,7 +174,9 @@ namespace escpos.core.reporthandlerwpf
 
         public override void OnRenderSectionReportHeaderFooter(PrintJob printJob, SectionReportHeader sectionReportHeader)
         {
-            printJob.PrintFormats.RemoveAt(printJob.PrintFormats.Count - 1);
+            PrintJobWPF printJobWPF = printJob as PrintJobWPF;
+            if (printJobWPF != null)
+                printJobWPF.PrintFormats.RemoveAt(printJobWPF.PrintFormats.Count - 1);
         }
 
 
@@ -191,7 +187,9 @@ namespace escpos.core.reporthandlerwpf
 
         public override void OnRenderSectionReportFooterFooter(PrintJob printJob, SectionReportFooter sectionReportFooter)
         {
-            printJob.PrintFormats.RemoveAt(printJob.PrintFormats.Count - 1);
+            PrintJobWPF printJobWPF = printJob as PrintJobWPF;
+            if (printJobWPF != null)
+                printJobWPF.PrintFormats.RemoveAt(printJobWPF.PrintFormats.Count - 1);
         }
 
 
@@ -202,7 +200,9 @@ namespace escpos.core.reporthandlerwpf
 
         public override void OnRenderSectionDataGroupFooter(PrintJob printJob, SectionDataGroup sectionDataGroup)
         {
-            printJob.PrintFormats.RemoveAt(printJob.PrintFormats.Count - 1);
+            PrintJobWPF printJobWPF = printJob as PrintJobWPF;
+            if (printJobWPF != null)
+                printJobWPF.PrintFormats.RemoveAt(printJobWPF.PrintFormats.Count - 1);
         }
 
 
@@ -213,16 +213,22 @@ namespace escpos.core.reporthandlerwpf
 
         public override void OnRenderSectionTableHeader(PrintJob printJob, Table table)
         {
-            PrintFormat printFormat = new PrintFormat();
-            printFormat.FontSize = table.FontSize;
-            printFormat.FontWeight = table.FontWeight;
-            printFormat.TextAlignment = table.TextAlignment;
-            printJob.PrintFormats.Add(printFormat);
+            PrintJobWPF printJobWPF = printJob as PrintJobWPF;
+            if (printJobWPF != null)
+            {
+                PrintFormat printFormat = new PrintFormat();
+                printFormat.FontSize = table.FontSize;
+                printFormat.FontWeight = table.FontWeight;
+                printFormat.TextAlignment = table.TextAlignment;
+                printJobWPF.PrintFormats.Add(printFormat);
+            }
         }
 
         public override void OnRenderSectionTableFooter(PrintJob printJob, Table table)
         {
-            printJob.PrintFormats.RemoveAt(printJob.PrintFormats.Count - 1);
+            PrintJobWPF printJobWPF = printJob as PrintJobWPF;
+            if (printJobWPF != null)
+                printJobWPF.PrintFormats.RemoveAt(printJobWPF.PrintFormats.Count - 1);
         }
 
 
@@ -238,7 +244,9 @@ namespace escpos.core.reporthandlerwpf
 
         public override void OnRenderTableRowGroupFooter(PrintJob printJob, TableRowGroup tableRowGroup)
         {
-            printJob.PrintFormats.RemoveAt(printJob.PrintFormats.Count - 1);
+            PrintJobWPF printJobWPF = printJob as PrintJobWPF;
+            if (printJobWPF != null)
+                printJobWPF.PrintFormats.RemoveAt(printJobWPF.PrintFormats.Count - 1);
         }
 
         public override void OnRenderTableRowHeader(PrintJob printJob, TableRow tableRow)
@@ -248,7 +256,9 @@ namespace escpos.core.reporthandlerwpf
 
         public override void OnRenderTableRowFooter(PrintJob printJob, TableRow tableRow)
         {
-            printJob.PrintFormats.RemoveAt(printJob.PrintFormats.Count - 1);
+            PrintJobWPF printJobWPF = printJob as PrintJobWPF;
+            if (printJobWPF != null)
+                printJobWPF.PrintFormats.RemoveAt(printJobWPF.PrintFormats.Count - 1);
         }
 
         #endregion
@@ -262,39 +272,57 @@ namespace escpos.core.reporthandlerwpf
 
         public override void OnRenderParagraphFooter(PrintJob printJob, Paragraph paragraph)
         {
-            printJob.PrintFormats.RemoveAt(printJob.PrintFormats.Count - 1);
+            PrintJobWPF printJobWPF = printJob as PrintJobWPF;
+            if (printJobWPF != null)
+                printJobWPF.PrintFormats.RemoveAt(printJobWPF.PrintFormats.Count - 1);
         }
 
         public override void OnRenderInlineContextValue(PrintJob printJob, InlineContextValue inlineContextValue)
         {
-            SetPrintFormat(printJob, inlineContextValue, null);
-            PrintFormat defaultPrintFormat = printJob.GetDefaultPrintFormat();
-            PrintFormattedText(printJob, defaultPrintFormat, inlineContextValue.Text);
-            printJob.PrintFormats.RemoveAt(printJob.PrintFormats.Count - 1);
+            PrintJobWPF printJobWPF = printJob as PrintJobWPF;
+            if (printJobWPF != null)
+            {
+                SetPrintFormat(printJob, inlineContextValue, null);
+                PrintFormat defaultPrintFormat = printJobWPF.GetDefaultPrintFormat();
+                PrintFormattedText(printJob, defaultPrintFormat, inlineContextValue.Text);
+                printJobWPF.PrintFormats.RemoveAt(printJobWPF.PrintFormats.Count - 1);
+            }
         }
 
         public override void OnRenderInlineDocumentValue(PrintJob printJob, InlineDocumentValue inlineDocumentValue)
         {
-            SetPrintFormat(printJob, inlineDocumentValue, null);
-            PrintFormat defaultPrintFormat = printJob.GetDefaultPrintFormat();
-            PrintFormattedText(printJob, defaultPrintFormat, inlineDocumentValue.Text);
-            printJob.PrintFormats.RemoveAt(printJob.PrintFormats.Count - 1);
+            PrintJobWPF printJobWPF = printJob as PrintJobWPF;
+            if (printJobWPF != null)
+            {
+                SetPrintFormat(printJob, inlineDocumentValue, null);
+                PrintFormat defaultPrintFormat = printJobWPF.GetDefaultPrintFormat();
+                PrintFormattedText(printJob, defaultPrintFormat, inlineDocumentValue.Text);
+                printJobWPF.PrintFormats.RemoveAt(printJobWPF.PrintFormats.Count - 1);
+            }
         }
 
         public override void OnRenderInlineACMethodValue(PrintJob printJob, InlineACMethodValue inlineACMethodValue)
         {
-            SetPrintFormat(printJob, inlineACMethodValue, null);
-            PrintFormat defaultPrintFormat = printJob.GetDefaultPrintFormat();
-            PrintFormattedText(printJob, defaultPrintFormat, inlineACMethodValue.Text);
-            printJob.PrintFormats.RemoveAt(printJob.PrintFormats.Count - 1);
+            PrintJobWPF printJobWPF = printJob as PrintJobWPF;
+            if (printJobWPF != null)
+            {
+                SetPrintFormat(printJob, inlineACMethodValue, null);
+                PrintFormat defaultPrintFormat = printJobWPF.GetDefaultPrintFormat();
+                PrintFormattedText(printJob, defaultPrintFormat, inlineACMethodValue.Text);
+                printJobWPF.PrintFormats.RemoveAt(printJobWPF.PrintFormats.Count - 1);
+            }
         }
 
         public override void OnRenderInlineTableCellValue(PrintJob printJob, InlineTableCellValue inlineTableCellValue)
         {
-            SetPrintFormat(printJob, inlineTableCellValue, null);
-            PrintFormat defaultPrintFormat = printJob.GetDefaultPrintFormat();
-            PrintFormattedText(printJob, defaultPrintFormat, inlineTableCellValue.Text);
-            printJob.PrintFormats.RemoveAt(printJob.PrintFormats.Count - 1);
+            PrintJobWPF printJobWPF = printJob as PrintJobWPF;
+            if (printJobWPF != null)
+            {
+                SetPrintFormat(printJob, inlineTableCellValue, null);
+                PrintFormat defaultPrintFormat = printJobWPF.GetDefaultPrintFormat();
+                PrintFormattedText(printJob, defaultPrintFormat, inlineTableCellValue.Text);
+                printJobWPF.PrintFormats.RemoveAt(printJobWPF.PrintFormats.Count - 1);
+            }
         }
 
         public override void OnRenderInlineBarcode(PrintJob printJob, InlineBarcode inlineBarcode)
@@ -315,25 +343,33 @@ namespace escpos.core.reporthandlerwpf
             {
                 BarCodeType barCodeType = BarCodeType.EAN8;
                 if (Enum.TryParse(inlineBarcode.BarcodeType.ToString(), out barCodeType))
-                    printJob.Main = printJob.Main.Add(Commands.LF, Commands.PrintBarCode(barCodeType, barcodeValue));
+                    printJob.Main = printJob.Main.Add(Commands.LF, Commands.Barcode(barCodeType, barcodeValue));
             }
             printJob.Main = printJob.Main.Add(Commands.LF, Commands.LF, Commands.LF, Commands.LF, Commands.LF);
         }
 
         public override void OnRenderInlineBoolValue(PrintJob printJob, InlineBoolValue inlineBoolValue)
         {
-            SetPrintFormat(printJob, inlineBoolValue, null);
-            PrintFormat defaultPrintFormat = printJob.GetDefaultPrintFormat();
-            PrintFormattedText(printJob, defaultPrintFormat, inlineBoolValue.Value.ToString());
-            printJob.PrintFormats.RemoveAt(printJob.PrintFormats.Count - 1);
+            PrintJobWPF printJobWPF = printJob as PrintJobWPF;
+            if (printJobWPF != null)
+            {
+                SetPrintFormat(printJob, inlineBoolValue, null);
+                PrintFormat defaultPrintFormat = printJobWPF.GetDefaultPrintFormat();
+                PrintFormattedText(printJob, defaultPrintFormat, inlineBoolValue.Value.ToString());
+                printJobWPF.PrintFormats.RemoveAt(printJobWPF.PrintFormats.Count - 1);
+            }
         }
 
         public override void OnRenderRun(PrintJob printJob, Run run)
         {
-            SetPrintFormat(printJob, run, null);
-            PrintFormat defaultPrintFormat = printJob.GetDefaultPrintFormat();
-            PrintFormattedText(printJob, defaultPrintFormat, run.Text);
-            printJob.PrintFormats.RemoveAt(printJob.PrintFormats.Count - 1);
+            PrintJobWPF printJobWPF = printJob as PrintJobWPF;
+            if (printJobWPF != null)
+            {
+                SetPrintFormat(printJob, run, null);
+                PrintFormat defaultPrintFormat = printJobWPF.GetDefaultPrintFormat();
+                PrintFormattedText(printJob, defaultPrintFormat, run.Text);
+                printJobWPF.PrintFormats.RemoveAt(printJobWPF.PrintFormats.Count - 1);
+            }
         }
 
         public override void OnRenderLineBreak(PrintJob printJob, LineBreak lineBreak)
@@ -348,11 +384,15 @@ namespace escpos.core.reporthandlerwpf
 
         private void SetPrintFormat(PrintJob printJob, TextElement textElement, TextAlignment? textAlignment)
         {
-            PrintFormat printFormat = new PrintFormat();
-            printFormat.FontSize = textElement.FontSize;
-            printFormat.FontWeight = textElement.FontWeight;
-            printFormat.TextAlignment = textAlignment;
-            printJob.PrintFormats.Add(printFormat);
+            PrintJobWPF printJobWPF = printJob as PrintJobWPF;
+            if (printJobWPF != null)
+            {
+                PrintFormat printFormat = new PrintFormat();
+                printFormat.FontSize = textElement.FontSize;
+                printFormat.FontWeight = textElement.FontWeight;
+                printFormat.TextAlignment = textAlignment;
+                printJobWPF.PrintFormats.Add(printFormat);
+            }
         }
 
         protected Tuple<Justification, CharSizeWidth, CharSizeHeight> GetESCFormat(PrintFormat defaultPrintFormat)
