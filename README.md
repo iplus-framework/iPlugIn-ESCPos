@@ -1,2 +1,1 @@
-# iPlugIn-ESCPos
-iPlugIn-ESCPos
+## iPlugIn-ESCPos.git
