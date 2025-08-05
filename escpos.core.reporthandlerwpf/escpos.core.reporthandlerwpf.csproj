@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="..\..\iPlus\Directory.Build.props" />
   <PropertyGroup>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>$(UITargetFramework)</TargetFramework>
     <OutputType>Library</OutputType>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <UseWPF>true</UseWPF>
@@ -8,18 +9,18 @@
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <OutputPath>..\bin\Debug\</OutputPath>
-    <IPlusIncludeDir>..\..\iPlusMES\bin\Debug\net8.0</IPlusIncludeDir>
+    <IPlusIncludeDir>..\..\iPlusMES\bin\Debug\$(UITargetFramework)</IPlusIncludeDir>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <OutputPath>..\bin\Release\</OutputPath>
-    <IPlusIncludeDir>..\..\iPlusMES\bin\Release\net8.0</IPlusIncludeDir>
+    <IPlusIncludeDir>..\..\iPlusMES\bin\Release\$(UITargetFramework)</IPlusIncludeDir>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="gip.core.autocomponent">
       <HintPath>$(IPlusIncludeDir)\gip.core.autocomponent.dll</HintPath>
     </Reference>
     <Reference Include="gip.core.reporthandlerwpf">
-      <HintPath>$(IPlusIncludeDir)-windows\gip.core.reporthandlerwpf.dll</HintPath>
+      <HintPath>$(IPlusIncludeDir)\gip.core.reporthandlerwpf.dll</HintPath>
     </Reference>
 	<Reference Include="gip.core.reporthandlerwpf">
       <HintPath>$(IPlusIncludeDir)\gip.core.reporthandler.dll</HintPath>
@@ -30,7 +31,5 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="ESCPOS" Version="1.2.4" />
-    <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
-    <PackageReference Include="System.Data.DataSetExtensions" Version="4.5.0" />
   </ItemGroup>
 </Project>
