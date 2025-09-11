@@ -7,6 +7,7 @@ using ESCPOS;
 using ESCPOS.Utils;
 using System.Windows;
 using gip.core.reporthandler;
+using System.Collections.Generic;
 
 namespace escpos.core.reporthandlerwpf
 {
@@ -63,7 +64,7 @@ namespace escpos.core.reporthandlerwpf
             switch (codePage)
             {
                 case 20127: // Encoding.ASCII.CodePage (437)
-                    bytes = Commands.SelectCodeTable(CodeTable.USA); 
+                    bytes = Commands.SelectCodeTable(CodeTable.USA);
                     break;
                 case 850:
                     bytes = Commands.SelectCodeTable(CodeTable.Multilingual);
@@ -155,7 +156,7 @@ namespace escpos.core.reporthandlerwpf
             base.OnRenderFlowDocument(printJob, flowDoc);
         }
 
-       
+
 
         #endregion
 
@@ -311,6 +312,25 @@ namespace escpos.core.reporthandlerwpf
                 printJob.Main = printJob.Main.Add(Commands.LF, Commands.SelectJustification(Justification.Center), Commands.SelectPrintMode(PrintMode.Reset),
                     ESCPosExt.PrintQRCodeExt(barcodeValue, QRCodeModel.Model1, QRCodeCorrection.Percent30, qRCodeSizeExt));
             }
+            else if (inlineBarcode.BarcodeType == BarcodeType.CODE128)
+            {
+                bool looksGs1 = barcodeValue.IndexOf('\x1D') >= 0;
+                if (looksGs1)
+                {
+                    string escposData = ToEscPosGs1Code128Data(barcodeValue);
+                    printJob.Main = printJob.Main.Add(
+                        Commands.LF,
+                        Commands.SelectJustification(Justification.Center),
+                        Commands.SelectPrintMode(PrintMode.Reset),
+                        Commands.PrintBarCode(BarCodeType.CODE128, escposData)
+                    );
+                }
+                else
+                {
+                    BarCodeType barCodeType = BarCodeType.CODE128;
+                    printJob.Main = printJob.Main.Add(Commands.LF, Commands.PrintBarCode(barCodeType, barcodeValue));
+                }
+            }
             else
             {
                 BarCodeType barCodeType = BarCodeType.EAN8;
@@ -318,6 +338,11 @@ namespace escpos.core.reporthandlerwpf
                     printJob.Main = printJob.Main.Add(Commands.LF, Commands.PrintBarCode(barCodeType, barcodeValue));
             }
             printJob.Main = printJob.Main.Add(Commands.LF, Commands.LF, Commands.LF, Commands.LF, Commands.LF);
+        }
+
+        private string ToEscPosGs1Code128Data(string gs1ElementString)
+        {
+            return "{B}{1}" + gs1ElementString.Replace("\x1D", "{1}");
         }
 
         public override void OnRenderInlineBoolValue(PrintJob printJob, InlineBoolValue inlineBoolValue)
