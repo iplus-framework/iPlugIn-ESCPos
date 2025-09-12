@@ -63,6 +63,7 @@
   <ItemGroup>
     <Compile Include="ESCPosExt.cs" />
     <Compile Include="ESCPosPrinter.cs" />
+    <Compile Include="Gs1Code128Raster.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

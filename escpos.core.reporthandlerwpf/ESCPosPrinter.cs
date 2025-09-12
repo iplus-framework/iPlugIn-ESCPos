@@ -7,7 +7,6 @@ using ESCPOS;
 using ESCPOS.Utils;
 using System.Windows;
 using gip.core.reporthandler;
-using System.Collections.Generic;
 
 namespace escpos.core.reporthandlerwpf
 {
@@ -314,15 +313,29 @@ namespace escpos.core.reporthandlerwpf
             }
             else if (inlineBarcode.BarcodeType == BarcodeType.CODE128)
             {
-                bool looksGs1 = barcodeValue.IndexOf('\x1D') >= 0;
-                if (looksGs1)
+                if (inlineBarcode.GS1Model != null && inlineBarcode.GS1Model.IsGs1 && !string.IsNullOrEmpty(inlineBarcode.GS1Model.EscPosPayload))
                 {
-                    string escposData = ToEscPosGs1Code128Data(barcodeValue);
+                    int maxPaperDots = 560;
+
+                    int desiredWidthDots = Gs1Code128Raster.Clamp(DipsToDots(inlineBarcode.BarcodeWidth), 200, maxPaperDots);
+                    int heightPx = Gs1Code128Raster.Clamp(DipsToDots(inlineBarcode.BarcodeHeight), 80, 240); // ~10–30 mm
+
+                    string brace = inlineBarcode.GS1Model.EscPosPayload;
+
+                    byte[] barcodeRaster = Gs1Code128Raster.FromBraceStringToRasterFit(
+                        brace,
+                        desiredWidthDots: desiredWidthDots,
+                        heightPx: heightPx,
+                        minModule: 1,
+                        maxModule: 6
+                    );
+
                     printJob.Main = printJob.Main.Add(
-                        Commands.LF,
-                        Commands.SelectJustification(Justification.Center),
-                        Commands.SelectPrintMode(PrintMode.Reset),
-                        Commands.PrintBarCode(BarCodeType.CODE128, escposData)
+                        new byte[] { 0x1B, 0x40 },           // ESC @ init
+                        new byte[] { 0x1B, 0x61, 0x01 },     // ESC a 1 (center)
+                        barcodeRaster,
+                        new byte[] { 0x1B, 0x61, 0x00 },     // ESC a 0 (left)
+                        new byte[] { 0x0A, 0x0A }
                     );
                 }
                 else
@@ -338,11 +351,6 @@ namespace escpos.core.reporthandlerwpf
                     printJob.Main = printJob.Main.Add(Commands.LF, Commands.PrintBarCode(barCodeType, barcodeValue));
             }
             printJob.Main = printJob.Main.Add(Commands.LF, Commands.LF, Commands.LF, Commands.LF, Commands.LF);
-        }
-
-        private string ToEscPosGs1Code128Data(string gs1ElementString)
-        {
-            return "{B}{1}" + gs1ElementString.Replace("\x1D", "{1}");
         }
 
         public override void OnRenderInlineBoolValue(PrintJob printJob, InlineBoolValue inlineBoolValue)
@@ -423,6 +431,17 @@ namespace escpos.core.reporthandlerwpf
             printJob.Main = printJob.Main.Add(Commands.SelectPrintMode(PrintMode.Reset));
             printJob.Main = printJob.Main.Add(Commands.SelectCharSize(format.Item2, format.Item3));
             printJob.Main = printJob.Main.Add(Commands.LF, Commands.SelectJustification(format.Item1), printJob.Encoding.GetBytes(text));
+        }
+
+        #endregion
+
+        #region Methods -> Render-> GS1
+
+
+
+        private static int DipsToDots(double dips, int dpi = 203)
+        {
+            return (int)Math.Round(dips / 96.0 * dpi);
         }
 
         #endregion
