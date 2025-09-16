@@ -315,27 +315,21 @@ namespace escpos.core.reporthandlerwpf
             {
                 if (inlineBarcode.GS1Model != null && inlineBarcode.GS1Model.IsGs1 && !string.IsNullOrEmpty(inlineBarcode.GS1Model.EscPosPayload))
                 {
-                    int maxPaperDots = 560;
-
-                    int desiredWidthDots = Gs1Code128Raster.Clamp(DipsToDots(inlineBarcode.BarcodeWidth), 200, maxPaperDots);
-                    int heightPx = Gs1Code128Raster.Clamp(DipsToDots(inlineBarcode.BarcodeHeight), 80, 240); // ~10–30 mm
-
-                    string brace = inlineBarcode.GS1Model.EscPosPayload;
-
-                    byte[] barcodeRaster = Gs1Code128Raster.FromBraceStringToRasterFit(
-                        brace,
-                        desiredWidthDots: desiredWidthDots,
-                        heightPx: heightPx,
-                        minModule: 1,
-                        maxModule: 6
+                    byte[] barcodeRaster = 
+                    Gs1Code128Raster.FromInputToRasterFit(
+                        fields: inlineBarcode.GS1Model.Items,
+                        desiredWidthDots: inlineBarcode.ESCDesiredWidthDots,
+                        heightPx: inlineBarcode.ESCHeightPx,
+                        minModule: inlineBarcode.ESCMinModule,
+                        maxModule: inlineBarcode.ESCMaxModule
                     );
 
                     printJob.Main = printJob.Main.Add(
-                        new byte[] { 0x1B, 0x40 },           // ESC @ init
-                        new byte[] { 0x1B, 0x61, 0x01 },     // ESC a 1 (center)
+                        Commands.LF,
+                        Commands.SelectJustification(Justification.Center),
                         barcodeRaster,
-                        new byte[] { 0x1B, 0x61, 0x00 },     // ESC a 0 (left)
-                        new byte[] { 0x0A, 0x0A }
+                        Commands.SelectJustification(Justification.Left),
+                        Commands.LF
                     );
                 }
                 else

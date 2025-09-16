@@ -36,18 +36,15 @@ namespace escpos.core.reporthandlerwpf
         private const int FNC1 = 102;
         private const int STOP = 106;
 
-        public static byte[] FromBraceStringToRaster(string brace, int moduleWidth = 2, int heightPx = 140)
+        public static byte[] FromInputToRaster(List<(string ai, string val, bool variable)> fields, int moduleWidth = 2, int heightPx = 140)
         {
-            var fields = ParseBrace(brace);
             var codewords = BuildCodewords(fields);
             return RenderRaster(codewords, moduleWidth, heightPx);
         }
 
-        public static byte[] FromBraceStringToRasterFit(string brace, int desiredWidthDots, int heightPx, int minModule = 1, int maxModule = 6)
+        public static byte[] FromInputToRasterFit(List<(string ai, string val, bool variable)> fields, int desiredWidthDots, int heightPx, int minModule = 1, int maxModule = 6)
         {
-            var fields = ParseBrace(brace);
             var codewords = BuildCodewords(fields);
-
             int totalModules = 0;
             for (int i = 0; i < codewords.Count; i++)
             {
@@ -64,31 +61,7 @@ namespace escpos.core.reporthandlerwpf
             return RenderRaster(codewords, moduleWidth, heightPx);
         }
 
-        private static List<(string ai, string val, bool variable)> ParseBrace(string brace)
-        {
-            string s = brace ?? "";
-            if (s.StartsWith("{B}")) s = s.Substring(3);
-            if (s.StartsWith("{1}")) s = s.Substring(3);
-
-            var parts = s.Split(new[] { "{1}" }, StringSplitOptions.None);
-            var list = new List<(string ai, string val, bool variable)>();
-
-            foreach (var p in parts)
-            {
-                if (string.IsNullOrEmpty(p)) continue;
-
-                if (p.StartsWith("240")) { list.Add(("240", p.Substring(3), true)); continue; }
-                if (p.StartsWith("30")) { list.Add(("30", p.Substring(2), true)); continue; }
-                if (p.StartsWith("10")) { list.Add(("10", p.Substring(2), true)); continue; }
-                if (p.StartsWith("17")) { list.Add(("17", p.Substring(2), false)); continue; }
-                if (p.StartsWith("11")) { list.Add(("11", p.Substring(2), false)); continue; }
-
-                var ai = p.Substring(0, 2);
-                var val = p.Substring(2);
-                list.Add((ai, val, true));
-            }
-            return list;
-        }
+        
 
         private static List<int> BuildCodewords(List<(string ai, string val, bool variable)> items)
         {
