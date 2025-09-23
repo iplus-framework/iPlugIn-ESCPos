@@ -308,8 +308,29 @@ namespace escpos.core.reporthandlerwpf
                 QRCodeSizeExt qRCodeSizeExt = QRCodeSizeExt.Six;
                 if (inlineBarcode.BarcodeWidth >= 2 && inlineBarcode.BarcodeWidth <= 10)
                     qRCodeSizeExt = (QRCodeSizeExt)inlineBarcode.BarcodeWidth;
-                printJob.Main = printJob.Main.Add(Commands.LF, Commands.SelectJustification(Justification.Center), Commands.SelectPrintMode(PrintMode.Reset),
-                    ESCPosExt.PrintQRCodeExt(barcodeValue, QRCodeModel.Model1, QRCodeCorrection.Percent30, qRCodeSizeExt));
+
+                // Check if this is GS1 QR code
+                if (inlineBarcode.GS1Model != null && inlineBarcode.GS1Model.IsGs1 && !string.IsNullOrEmpty(inlineBarcode.GS1Model.RawGs1Value))
+                {
+                    // For GS1 QR codes, add FNC1 prefix to the existing raw GS1 value
+                    string gs1QrContent = "\u001D" + inlineBarcode.GS1Model.RawGs1Value;
+                    
+                    printJob.Main = printJob.Main.Add(Commands.LF, Commands.SelectJustification(Justification.Center), Commands.SelectPrintMode(PrintMode.Reset),
+                        ESCPosExt.PrintQRCodeExt(gs1QrContent, QRCodeModel.Model1, QRCodeCorrection.Percent30, qRCodeSizeExt));
+                    
+                    // Print HRI (Human Readable Interpretation) text below QR code if ShowHRI is enabled
+                    if (inlineBarcode.ShowHRI && !string.IsNullOrEmpty(inlineBarcode.GS1Model.HriText))
+                    {
+                        printJob.Main = printJob.Main.Add(Commands.LF, Commands.SelectJustification(Justification.Center), Commands.SelectPrintMode(PrintMode.Reset));
+                        printJob.Main = printJob.Main.Add(printJob.Encoding.GetBytes(inlineBarcode.GS1Model.HriText));
+                    }
+                }
+                else
+                {
+                    // Regular QR code without GS1
+                    printJob.Main = printJob.Main.Add(Commands.LF, Commands.SelectJustification(Justification.Center), Commands.SelectPrintMode(PrintMode.Reset),
+                        ESCPosExt.PrintQRCodeExt(barcodeValue, QRCodeModel.Model1, QRCodeCorrection.Percent30, qRCodeSizeExt));
+                }
             }
             else if (inlineBarcode.BarcodeType == BarcodeType.CODE128)
             {
@@ -321,7 +342,8 @@ namespace escpos.core.reporthandlerwpf
                         desiredWidthDots: inlineBarcode.ESCDesiredWidthDots,
                         heightPx: inlineBarcode.ESCHeightPx,
                         minModule: inlineBarcode.ESCMinModule,
-                        maxModule: inlineBarcode.ESCMaxModule
+                        maxModule: inlineBarcode.ESCMaxModule,
+                        rotated90: inlineBarcode.Rotate90
                     );
 
                     printJob.Main = printJob.Main.Add(
@@ -331,6 +353,13 @@ namespace escpos.core.reporthandlerwpf
                         Commands.SelectJustification(Justification.Left),
                         Commands.LF
                     );
+                    
+                    // Print HRI (Human Readable Interpretation) text below Code128 barcode if ShowHRI is enabled
+                    if (inlineBarcode.ShowHRI && !string.IsNullOrEmpty(inlineBarcode.GS1Model.HriText))
+                    {
+                        printJob.Main = printJob.Main.Add(Commands.LF, Commands.SelectJustification(Justification.Center), Commands.SelectPrintMode(PrintMode.Reset));
+                        printJob.Main = printJob.Main.Add(printJob.Encoding.GetBytes(inlineBarcode.GS1Model.HriText));
+                    }
                 }
                 else
                 {
