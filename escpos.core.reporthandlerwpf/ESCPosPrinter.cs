@@ -8,6 +8,7 @@ using ESCPOS.Utils;
 using System.Windows;
 using gip.core.reporthandler;
 using gip.core.reporthandlerwpf;
+using System.Threading.Tasks;
 
 namespace escpos.core.reporthandlerwpf
 {
@@ -29,7 +30,7 @@ namespace escpos.core.reporthandlerwpf
             return true;
         }
 
-        public override bool ACDeInit(bool deleteACClassTask = false)
+        public override Task<bool> ACDeInit(bool deleteACClassTask = false)
         {
             return base.ACDeInit(deleteACClassTask);
         }
@@ -392,7 +393,7 @@ namespace escpos.core.reporthandlerwpf
                 else
                 {
                     BarCodeType barCodeType = BarCodeType.CODE128;
-                    printJob.Main = printJob.Main.Add(Commands.LF, Commands.PrintBarCode(barCodeType, barcodeValue));
+                    printJob.Main = printJob.Main.Add(Commands.LF, Commands.Barcode(barCodeType, barcodeValue));
                 }
             }
             else

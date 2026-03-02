@@ -1,0 +1,6 @@
+<Project>
+  <Import Project="..\iPlus\Directory.Packages.props" />
+  <ItemGroup>
+    <!-- <PackageVersion Include="ESCPOS" Version="1.2.4" /> -->
+  </ItemGroup>
+</Project>

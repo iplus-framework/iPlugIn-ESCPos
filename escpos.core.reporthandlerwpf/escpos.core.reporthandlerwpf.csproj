@@ -43,6 +43,6 @@
     </ProjectReference>   
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="ESCPOS" Version="1.2.4" />
+    <PackageReference Include="ESCPOS" />
   </ItemGroup>
 </Project>
