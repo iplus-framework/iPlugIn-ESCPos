@@ -1,5 +1,4 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-  <Import Project="..\..\iPlus\Directory.Build.props" />
   <PropertyGroup>
     <TargetFramework>$(UITargetFramework)</TargetFramework>
     <OutputType>Library</OutputType>
