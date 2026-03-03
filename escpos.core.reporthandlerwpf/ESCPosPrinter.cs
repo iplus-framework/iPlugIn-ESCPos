@@ -30,9 +30,9 @@ namespace escpos.core.reporthandlerwpf
             return true;
         }
 
-        public override Task<bool> ACDeInit(bool deleteACClassTask = false)
+        public override async Task<bool> ACDeInit(bool deleteACClassTask = false)
         {
-            return base.ACDeInit(deleteACClassTask);
+            return await base.ACDeInit(deleteACClassTask);
         }
         #endregion
 
