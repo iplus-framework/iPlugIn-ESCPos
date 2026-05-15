@@ -3,5 +3,6 @@
     <File Path="Directory.Build.props" />
     <File Path="Directory.Packages.props" />
   </Folder>
+  <Project Path="escpos.core.reporthandler/escpos.core.reporthandler.csproj" />
   <Project Path="escpos.core.reporthandlerwpf/escpos.core.reporthandlerwpf.csproj" />
 </Solution>
