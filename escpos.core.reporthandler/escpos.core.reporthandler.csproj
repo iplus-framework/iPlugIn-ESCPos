@@ -39,4 +39,9 @@
   <ItemGroup>
     <PackageReference Include="ESCPOS" />
   </ItemGroup>
+	<ItemGroup>
+		<None Update="VBControlScripts/2026-05-18 19-11_dlisak.zip">
+		  <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>  
 </Project>
