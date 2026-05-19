@@ -12,6 +12,7 @@ namespace escpos.core.reporthandler
     [ACClassInfo(Const.PackName_VarioSystem, "en{'ESCPos Printer X'}de{'ESCPos Printer X'}", Global.ACKinds.TPABGModule, Global.ACStorableTypes.Required, false, false)]
     public class ESCPosPrinterX : ACPrintServerBase
     {
+        private readonly ESCPosPrinterXShared _shared;
         private ACPropertyConfigValue<bool> _UseScryberLayoutRenderer;
 
         [ACPropertyConfig("en{'Use Scryber layout renderer'}de{'Scryber-Layout-Renderer verwenden'}")]
@@ -24,6 +25,7 @@ namespace escpos.core.reporthandler
         public ESCPosPrinterX(ACClass acType, IACObject content, IACObject parentACObject, ACValueList parameter, string acIdentifier = "")
             : base(acType, content, parentACObject, parameter, acIdentifier)
         {
+            _shared = new ESCPosPrinterXShared();
             _UseScryberLayoutRenderer = new ACPropertyConfigValue<bool>(this, nameof(UseScryberLayoutRenderer), true);
         }
 
@@ -48,21 +50,7 @@ namespace escpos.core.reporthandler
 
         public virtual byte[] GetESCPosCodePage(int codePage)
         {
-            switch (codePage)
-            {
-                case 20127:
-                    return Commands.SelectCodeTable(CodeTable.USA);
-                case 850:
-                    return Commands.SelectCodeTable(CodeTable.Multilingual);
-                case 852:
-                    return Commands.SelectCodeTable(CodeTable.Latin2);
-                case 855:
-                    return Commands.SelectCodeTable(CodeTable.Cyrillic);
-                case 1252:
-                    return Commands.SelectCodeTable(CodeTable.Windows1252);
-                default:
-                    return Commands.SelectCodeTable(CodeTable.USA);
-            }
+            return _shared.GetESCPosCodePage(codePage);
         }
 
         protected override PrintJob TryCreateScryberCustomPrintJob(ACClassDesign aCClassDesign, ReportData reportData)
@@ -77,14 +65,14 @@ namespace escpos.core.reporthandler
             try
             {
                 Encoding encoding = ResolveEncoding();
-                byte[] codePageCommand = GetESCPosCodePage(encoding.CodePage);
+                byte[] codePageCommand = _shared.GetESCPosCodePage(encoding.CodePage);
                 ESCPosScryberLayoutRendererX renderer = new ESCPosScryberLayoutRendererX(encoding, codePageCommand);
 
                 byte[] bytes = ScryberReportEngine.RenderWithLayoutRenderer(template, reportData, renderer);
                 if (bytes == null || bytes.Length == 0)
                     return null;
 
-                return new PrintJob
+                return new ESCPosPrintJobX
                 {
                     Name = aCClassDesign.ACIdentifier,
                     Main = bytes,
@@ -119,15 +107,17 @@ namespace escpos.core.reporthandler
 
         public override bool SendDataToPrinter(PrintJob printJob)
         {
-            if (printJob?.Main == null)
+            if (printJob == null)
                 return false;
 
-            byte[] bytes = printJob.Main;
+            byte[] bytes = _shared.GetTransportBytes(printJob, appendFullPaperCut: true);
+            if (bytes == null || bytes.Length == 0)
+                return false;
+
             for (int tries = 0; tries < PrintTries; tries++)
             {
                 try
                 {
-                    bytes = bytes.Add(Commands.FullPaperCut);
                     bytes.Print($"{IPAddress}:{Port}");
                     if (IsAlarmActive(IsConnected) != null)
                         AcknowledgeAlarms();

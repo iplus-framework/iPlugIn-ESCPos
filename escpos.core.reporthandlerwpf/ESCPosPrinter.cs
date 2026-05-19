@@ -19,6 +19,8 @@ namespace escpos.core.reporthandlerwpf
     [ACClassInfo(Const.PackName_VarioSystem, "en{'ESCPos Printer'}de{'ESCPos Printer'}", Global.ACKinds.TPABGModule, Global.ACStorableTypes.Required, false, false)]
     public class ESCPosPrinter : ACPrintServerBaseWPF
     {
+        private readonly ESCPosPrinterXShared _shared = new ESCPosPrinterXShared();
+
 
         #region ctor's
         public ESCPosPrinter(ACClass acType, IACObject content, IACObject parentACObject, ACValueList parameter, string acIdentifier = "")
@@ -65,29 +67,7 @@ namespace escpos.core.reporthandlerwpf
 
         public virtual byte[] GetESCPosCodePage(int codePage)
         {
-            byte[] bytes = null;
-            switch (codePage)
-            {
-                case 20127: // Encoding.ASCII.CodePage (437)
-                    bytes = Commands.SelectCodeTable(CodeTable.USA);
-                    break;
-                case 850:
-                    bytes = Commands.SelectCodeTable(CodeTable.Multilingual);
-                    break;
-                case 852:
-                    bytes = Commands.SelectCodeTable(CodeTable.Latin2);
-                    break;
-                case 855:
-                    bytes = Commands.SelectCodeTable(CodeTable.Cyrillic);
-                    break;
-                case 1252:
-                    bytes = Commands.SelectCodeTable(CodeTable.Windows1252);
-                    break;
-                default:
-                    bytes = Commands.SelectCodeTable(CodeTable.USA);
-                    break;
-            }
-            return bytes;
+            return _shared.GetESCPosCodePage(codePage);
         }
 
         //public byte[] GetInternationalCharacterSet(string language)
@@ -133,16 +113,19 @@ namespace escpos.core.reporthandlerwpf
         /// <exception cref="NotImplementedException"></exception>
         public override bool SendDataToPrinter(PrintJob printJob)
         {
-            if (printJob == null || printJob.Main == null)
+            if (printJob == null)
             {
                 return false;
             }
-            byte[] bytes = printJob.Main;
+
+            byte[] bytes = _shared.GetTransportBytes(printJob, appendFullPaperCut: true);
+            if (bytes == null || bytes.Length == 0)
+                return false;
+
             for (int tries = 0; tries < PrintTries; tries++)
             {
                 try
                 {
-                    bytes = bytes.Add(Commands.FullPaperCut);
                     bytes.Print(string.Format("{0}:{1}", IPAddress, Port));
                     if (IsAlarmActive(IsConnected) != null)
                         AcknowledgeAlarms();
@@ -164,10 +147,54 @@ namespace escpos.core.reporthandlerwpf
 
         #region Methods -> Render -> FlowDoc
 
+        public override PrintJob GetPrintJob(string reportName, FlowDocument flowDocument)
+        {
+            Encoding encoder = ResolveEncoding();
+            VBFlowDocument vbFlowDocument = flowDocument as VBFlowDocument;
+
+            int? codePage = null;
+            if (vbFlowDocument != null && vbFlowDocument.CodePage > 0)
+                codePage = vbFlowDocument.CodePage;
+            else if (CodePage > 0)
+                codePage = CodePage;
+
+            if (codePage.HasValue)
+            {
+                try
+                {
+                    encoder = Encoding.GetEncoding(codePage.Value);
+                }
+                catch (Exception ex)
+                {
+                    Messages.LogException(GetACUrl(), nameof(GetPrintJob), ex);
+                }
+            }
+
+            ESCPosPrintJobWPF printJob = new ESCPosPrintJobWPF
+            {
+                FlowDocument = flowDocument,
+                Encoding = encoder,
+                ColumnMultiplier = 1,
+                ColumnDivisor = 1,
+            };
+
+            OnRenderFlowDocument(printJob, printJob.FlowDocument);
+            return printJob;
+        }
+
         public override void OnRenderFlowDocument(PrintJob printJob, FlowDocument flowDoc)
         {
-            printJob.Main.Add(Commands.InitializePrinter);
-            printJob.Main = printJob.Main.Add(GetESCPosCodePage(printJob.Encoding.CodePage));
+            if (printJob is IESCPosPrintJob escPosPrintJob)
+            {
+                _shared.InitializeJob(escPosPrintJob, printJob?.Encoding?.CodePage ?? Encoding.ASCII.CodePage);
+            }
+            else
+            {
+                printJob.Main = ESCPosPrinterXShared.Append(printJob.Main,
+                    Commands.InitializePrinter,
+                    _shared.GetESCPosCodePage(printJob?.Encoding?.CodePage ?? Encoding.ASCII.CodePage));
+            }
+
             base.OnRenderFlowDocument(printJob, flowDoc);
         }
 
@@ -352,6 +379,10 @@ namespace escpos.core.reporthandlerwpf
             if (printJob == null || inlineBarcode == null || inlineBarcode.Value == null)
                 return;
 
+            IESCPosPrintJob escPosPrintJob = printJob as IESCPosPrintJob;
+            if (escPosPrintJob == null)
+                return;
+
             string barcodeValue = inlineBarcode.Value.ToString();
             if (inlineBarcode.BarcodeType == BarcodeType.QRCODE)
             {
@@ -359,71 +390,42 @@ namespace escpos.core.reporthandlerwpf
                 if (inlineBarcode.BarcodeWidth >= 2 && inlineBarcode.BarcodeWidth <= 10)
                     qRCodeSizeExt = (QRCodeSizeExt)inlineBarcode.BarcodeWidth;
 
-                // Check if this is GS1 QR code
-                if (inlineBarcode.GS1Model != null && inlineBarcode.GS1Model.IsGs1 && !string.IsNullOrEmpty(inlineBarcode.GS1Model.RawGs1Value))
-                {
-                    // For GS1 QR codes, add FNC1 prefix to the existing raw GS1 value
-                    string gs1QrContent = "\u001D" + inlineBarcode.GS1Model.RawGs1Value;
-                    
-                    printJob.Main = printJob.Main.Add(Commands.LF, Commands.SelectJustification(Justification.Center), Commands.SelectPrintMode(PrintMode.Reset),
-                        ESCPosExt.PrintQRCodeExt(gs1QrContent, QRCodeModel.Model1, QRCodeCorrection.Percent30, qRCodeSizeExt));
-                    
-                    // Print HRI (Human Readable Interpretation) text below QR code if ShowHRI is enabled
-                    if (inlineBarcode.ShowHRI && !string.IsNullOrEmpty(inlineBarcode.GS1Model.HriText))
-                    {
-                        printJob.Main = printJob.Main.Add(Commands.LF, Commands.SelectJustification(Justification.Center), Commands.SelectPrintMode(PrintMode.Reset));
-                        printJob.Main = printJob.Main.Add(printJob.Encoding.GetBytes(inlineBarcode.GS1Model.HriText));
-                    }
-                }
-                else
-                {
-                    // Regular QR code without GS1
-                    printJob.Main = printJob.Main.Add(Commands.LF, Commands.SelectJustification(Justification.Center), Commands.SelectPrintMode(PrintMode.Reset),
-                        ESCPosExt.PrintQRCodeExt(barcodeValue, QRCodeModel.Model1, QRCodeCorrection.Percent30, qRCodeSizeExt));
-                }
+                byte[] barcodeBytes = _shared.BuildQrCodeBytes(
+                    barcodeValue,
+                    inlineBarcode.GS1Model,
+                    inlineBarcode.ShowHRI,
+                    Justification.Center,
+                    qRCodeSizeExt,
+                    printJob.Encoding);
+
+                _shared.AppendToJob(escPosPrintJob, barcodeBytes);
             }
             else if (inlineBarcode.BarcodeType == BarcodeType.CODE128)
             {
-                if (inlineBarcode.GS1Model != null && inlineBarcode.GS1Model.IsGs1 && !string.IsNullOrEmpty(inlineBarcode.GS1Model.EscPosPayload))
-                {
-                    byte[] barcodeRaster = 
-                    Gs1Code128RasterX.FromInputToRasterFit(
-                        fields: inlineBarcode.GS1Model.Items,
-                        desiredWidthDots: inlineBarcode.ESCDesiredWidthDots,
-                        heightPx: inlineBarcode.ESCHeightPx,
-                        minModule: inlineBarcode.ESCMinModule,
-                        maxModule: inlineBarcode.ESCMaxModule,
-                        rotated90: inlineBarcode.Rotate90
-                    );
 
-                    printJob.Main = printJob.Main.Add(
-                        Commands.LF,
-                        Commands.SelectJustification(Justification.Center),
-                        barcodeRaster,
-                        Commands.SelectJustification(Justification.Left),
-                        Commands.LF
-                    );
-                    
-                    // Print HRI (Human Readable Interpretation) text below Code128 barcode if ShowHRI is enabled
-                    if (inlineBarcode.ShowHRI && !string.IsNullOrEmpty(inlineBarcode.GS1Model.HriText))
-                    {
-                        printJob.Main = printJob.Main.Add(Commands.LF, Commands.SelectJustification(Justification.Center), Commands.SelectPrintMode(PrintMode.Reset));
-                        printJob.Main = printJob.Main.Add(printJob.Encoding.GetBytes(inlineBarcode.GS1Model.HriText));
-                    }
-                }
-                else
-                {
-                    BarCodeType barCodeType = BarCodeType.CODE128;
-                    printJob.Main = printJob.Main.Add(Commands.LF, Commands.Barcode(barCodeType, barcodeValue));
-                }
+                byte[] barcodeBytes = _shared.BuildCode128Bytes(
+                    barcodeValue,
+                    inlineBarcode.GS1Model,
+                    inlineBarcode.ShowHRI,
+                    Justification.Center,
+                    printJob.Encoding,
+                    inlineBarcode.ESCDesiredWidthDots,
+                    inlineBarcode.ESCHeightPx,
+                    inlineBarcode.ESCMinModule,
+                    inlineBarcode.ESCMaxModule,
+                    inlineBarcode.Rotate90);
+
+                _shared.AppendToJob(escPosPrintJob, barcodeBytes);
             }
             else
             {
                 BarCodeType barCodeType = BarCodeType.EAN8;
                 if (Enum.TryParse(inlineBarcode.BarcodeType.ToString(), out barCodeType))
-                    printJob.Main = printJob.Main.Add(Commands.LF, Commands.Barcode(barCodeType, barcodeValue));
+                {
+                    byte[] barcodeBytes = _shared.BuildGenericBarcodeBytes(barCodeType, barcodeValue);
+                    _shared.AppendToJob(escPosPrintJob, barcodeBytes);
+                }
             }
-            printJob.Main = printJob.Main.Add(Commands.LF, Commands.LF, Commands.LF, Commands.LF, Commands.LF);
         }
 
         public override void OnRenderInlineBoolValue(PrintJob printJob, InlineBoolValue inlineBoolValue)

@@ -22,6 +22,7 @@ namespace escpos.core.reporthandler
     /// </summary>
     public sealed class ESCPosScryberLayoutRendererX : IDocumentLayoutRenderer
     {
+        private readonly ESCPosPrinterXShared _shared = new ESCPosPrinterXShared();
         private readonly Encoding _encoding;
         private readonly byte[] _codePageCommand;
 
@@ -101,10 +102,11 @@ namespace escpos.core.reporthandler
 
             StringBuilder text = new StringBuilder();
             Justification lineAlignment = MapAlignment(line.HAlignment);
+            HashSet<string> emittedBarcodeKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (PDFLayoutRun run in line.Runs)
             {
-                if (TryWriteBarcodeRun(output, document, run, lineAlignment))
+                if (TryWriteBarcodeRun(output, document, run, lineAlignment, emittedBarcodeKeys))
                     continue;
 
                 string runText = ExtractRunText(run);
@@ -122,19 +124,24 @@ namespace escpos.core.reporthandler
             WriteBytes(output, Commands.LF);
         }
 
-        private bool TryWriteBarcodeRun(Stream output, ScryberDocument document, PDFLayoutRun run, Justification fallbackAlignment)
+        private bool TryWriteBarcodeRun(Stream output, ScryberDocument document, PDFLayoutRun run, Justification fallbackAlignment, HashSet<string> emittedBarcodeKeys)
         {
             Component component = run?.Owner as Component;
-            if (!TryGetMetadata(component, out string barcodeTypeValue, "barcode-type", "escpos-barcode-type"))
+            if (!TryGetMetadata(component, out string barcodeTypeValue, out Component barcodeMetadataOwner, "barcode-type", "escpos-barcode-type"))
                 return false;
 
-            string barcodeValue = ResolveBarcodeValue(document, component, run, out GS1Model gs1Model);
+            Component barcodeComponent = barcodeMetadataOwner ?? component;
+            string barcodeDedupKey = BuildBarcodeDedupKey(barcodeComponent, barcodeTypeValue);
+            if (!emittedBarcodeKeys.Add(barcodeDedupKey))
+                return true;
+
+            string barcodeValue = ResolveBarcodeValue(document, barcodeComponent, run, out GS1Model gs1Model);
             if (String.IsNullOrWhiteSpace(barcodeValue))
                 return true;
 
-            bool showHri = GetBoolMetadata(component, false, "show-hri");
+            bool showHri = GetBoolMetadata(barcodeComponent, false, "show-hri");
             Justification alignment = fallbackAlignment;
-            if (TryGetMetadata(component, out string alignValue, "barcode-align"))
+            if (TryGetMetadata(barcodeComponent, out string alignValue, "barcode-align"))
             {
                 if (alignValue.Equals("center", StringComparison.OrdinalIgnoreCase))
                     alignment = Justification.Center;
@@ -146,79 +153,59 @@ namespace escpos.core.reporthandler
 
             if (barcodeTypeValue.Equals("QRCODE", StringComparison.OrdinalIgnoreCase))
             {
-                int sizeValue = GetIntMetadata(component, 6, "barcode-width", "qr-pixels-per-module");
+                int sizeValue = GetIntMetadata(barcodeComponent, 6, "barcode-width", "qr-pixels-per-module");
                 if (sizeValue < 2 || sizeValue > 10)
                     sizeValue = 6;
 
                 QRCodeSizeExt size = (QRCodeSizeExt)sizeValue;
-                string qrContent = gs1Model != null && gs1Model.IsGs1 && !string.IsNullOrEmpty(gs1Model.RawGs1Value)
-                    ? "\u001D" + gs1Model.RawGs1Value
-                    : barcodeValue;
-
-                WriteBytes(output,
-                    Commands.LF,
-                    Commands.SelectJustification(alignment),
-                    Commands.SelectPrintMode(PrintMode.Reset),
-                    ESCPosExtX.PrintQRCodeExt(qrContent, QRCodeModel.Model1, QRCodeCorrection.Percent30, size));
-
-                if (showHri && !string.IsNullOrWhiteSpace(gs1Model?.HriText))
-                {
-                    WriteBytes(output, Commands.LF, Commands.SelectJustification(alignment), Commands.SelectPrintMode(PrintMode.Reset));
-                    WriteBytes(output, _encoding.GetBytes(gs1Model.HriText));
-                }
-
-                WriteBytes(output, Commands.LF, Commands.LF, Commands.LF, Commands.LF, Commands.LF);
+                byte[] barcodeBytes = _shared.BuildQrCodeBytes(barcodeValue, gs1Model, showHri, alignment, size, _encoding);
+                WriteBytes(output, barcodeBytes);
                 return true;
             }
 
             if (barcodeTypeValue.Equals("CODE128", StringComparison.OrdinalIgnoreCase))
             {
-                if (gs1Model != null && gs1Model.IsGs1 && gs1Model.Items != null && gs1Model.Items.Count > 0)
-                {
-                    int desiredWidthDots = GetIntMetadata(component, 3, "esc-desired-width-dots");
-                    int heightPx = GetIntMetadata(component, 250, "esc-height-px", "barcode-height");
-                    int minModule = GetIntMetadata(component, 1, "esc-min-module");
-                    int maxModule = GetIntMetadata(component, 6, "esc-max-module");
-                    bool rotate90 = GetBoolMetadata(component, false, "rotate-90");
+                int desiredWidthDots = GetIntMetadata(barcodeComponent, 3, "esc-desired-width-dots");
+                int heightPx = GetIntMetadata(barcodeComponent, 250, "esc-height-px", "barcode-height");
+                int minModule = GetIntMetadata(barcodeComponent, 1, "esc-min-module");
+                int maxModule = GetIntMetadata(barcodeComponent, 6, "esc-max-module");
+                bool rotate90 = GetBoolMetadata(barcodeComponent, false, "rotate-90");
 
-                    byte[] barcodeRaster = Gs1Code128RasterX.FromInputToRasterFit(
-                        fields: gs1Model.Items,
-                        desiredWidthDots: desiredWidthDots,
-                        heightPx: heightPx,
-                        minModule: minModule,
-                        maxModule: maxModule,
-                        rotated90: rotate90);
+                byte[] barcodeBytes = _shared.BuildCode128Bytes(
+                    barcodeValue,
+                    gs1Model,
+                    showHri,
+                    alignment,
+                    _encoding,
+                    desiredWidthDots,
+                    heightPx,
+                    minModule,
+                    maxModule,
+                    rotate90);
 
-                    WriteBytes(output,
-                        Commands.LF,
-                        Commands.SelectJustification(alignment),
-                        barcodeRaster,
-                        Commands.SelectJustification(Justification.Left),
-                        Commands.LF);
-
-                    if (showHri && !string.IsNullOrWhiteSpace(gs1Model.HriText))
-                    {
-                        WriteBytes(output, Commands.LF, Commands.SelectJustification(alignment), Commands.SelectPrintMode(PrintMode.Reset));
-                        WriteBytes(output, _encoding.GetBytes(gs1Model.HriText));
-                    }
-
-                    WriteBytes(output, Commands.LF, Commands.LF, Commands.LF, Commands.LF, Commands.LF);
-                    return true;
-                }
-
-                WriteBytes(output, Commands.LF, Commands.Barcode(BarCodeType.CODE128, barcodeValue));
-                WriteBytes(output, Commands.LF, Commands.LF, Commands.LF, Commands.LF, Commands.LF);
+                WriteBytes(output, barcodeBytes);
                 return true;
             }
 
             if (Enum.TryParse(barcodeTypeValue, true, out BarCodeType otherType))
             {
-                WriteBytes(output, Commands.LF, Commands.Barcode(otherType, barcodeValue));
-                WriteBytes(output, Commands.LF, Commands.LF, Commands.LF, Commands.LF, Commands.LF);
+                byte[] barcodeBytes = _shared.BuildGenericBarcodeBytes(otherType, barcodeValue);
+                WriteBytes(output, barcodeBytes);
                 return true;
             }
 
             return false;
+        }
+
+        private static string BuildBarcodeDedupKey(Component barcodeComponent, string barcodeType)
+        {
+            string id = barcodeComponent?.ID;
+            if (string.IsNullOrWhiteSpace(id))
+                id = barcodeComponent?.UniqueID;
+            if (string.IsNullOrWhiteSpace(id))
+                id = barcodeComponent?.ElementName ?? "unknown";
+
+            return id + "|" + (barcodeType ?? string.Empty);
         }
 
         private string ResolveBarcodeValue(ScryberDocument document, Component component, PDFLayoutRun run, out GS1Model gs1Model)
@@ -308,23 +295,44 @@ namespace escpos.core.reporthandler
 
         private static bool TryGetMetadata(Component component, out string value, params string[] keys)
         {
+            return TryGetMetadata(component, out value, out _, keys);
+        }
+
+        private static bool TryGetMetadata(Component component, out string value, out Component metadataOwner, params string[] keys)
+        {
             value = null;
+            metadataOwner = null;
             if (component == null || keys == null || keys.Length == 0)
                 return false;
 
-            foreach (string key in keys)
+            foreach (Component candidate in EnumerateCandidateComponents(component))
             {
-                if (string.IsNullOrWhiteSpace(key))
-                    continue;
-
-                if (component.TryGetMetadata(key, out value) && !string.IsNullOrWhiteSpace(value))
+                foreach (string key in keys)
                 {
-                    value = value.Trim();
-                    return true;
+                    if (string.IsNullOrWhiteSpace(key))
+                        continue;
+
+                    if (candidate.TryGetMetadata(key, out value) && !string.IsNullOrWhiteSpace(value))
+                    {
+                        value = value.Trim();
+                        metadataOwner = candidate;
+                        return true;
+                    }
                 }
             }
 
             return false;
+        }
+
+        private static IEnumerable<Component> EnumerateCandidateComponents(Component component)
+        {
+            HashSet<Component> visited = new HashSet<Component>();
+            Component current = component;
+            while (current != null && visited.Add(current))
+            {
+                yield return current;
+                current = current.Parent;
+            }
         }
 
         private static int GetIntMetadata(Component component, int defaultValue, params string[] keys)
