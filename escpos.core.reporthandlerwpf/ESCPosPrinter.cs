@@ -8,6 +8,7 @@ using ESCPOS.Utils;
 using System.Windows;
 using gip.core.reporthandler;
 using gip.core.reporthandlerwpf;
+using escpos.core.reporthandler;
 using System.Threading.Tasks;
 using System.Text;
 using gip.core.layoutengine;
@@ -19,28 +20,16 @@ namespace escpos.core.reporthandlerwpf
     public class ESCPosPrinter : ACPrintServerBaseWPF
     {
 
-        private ACPropertyConfigValue<bool> _UseScryberLayoutRenderer;
-
-        [ACPropertyConfig("en{'Use Scryber layout renderer'}de{'Scryber-Layout-Renderer verwenden'}")]
-        public bool UseScryberLayoutRenderer
-        {
-            get => _UseScryberLayoutRenderer.ValueT;
-            set => _UseScryberLayoutRenderer.ValueT = value;
-        }
-
         #region ctor's
         public ESCPosPrinter(ACClass acType, IACObject content, IACObject parentACObject, ACValueList parameter, string acIdentifier = "")
            : base(acType, content, parentACObject, parameter, acIdentifier)
         {
-            _UseScryberLayoutRenderer = new ACPropertyConfigValue<bool>(this, nameof(UseScryberLayoutRenderer), true);
         }
 
         public override bool ACInit(Global.ACStartTypes startChildMode = Global.ACStartTypes.Automatic)
         {
             if (!base.ACInit(startChildMode))
                 return false;
-
-            _ = UseScryberLayoutRenderer;
 
             return true;
         }
@@ -119,41 +108,6 @@ namespace escpos.core.reporthandlerwpf
         #endregion
 
         #region Methods -> Render
-
-        protected override PrintJob TryCreateScryberCustomPrintJob(ACClassDesign aCClassDesign, ReportData reportData)
-        {
-            if (!UseScryberLayoutRenderer || aCClassDesign == null || reportData == null)
-                return null;
-
-            string template = GetScryberTemplate(aCClassDesign);
-            if (String.IsNullOrWhiteSpace(template))
-                return null;
-
-            try
-            {
-                Encoding encoding = ResolveEncoding();
-                byte[] codePageCommand = GetESCPosCodePage(encoding.CodePage);
-                ESCPosScryberLayoutRenderer renderer = new ESCPosScryberLayoutRenderer(encoding, codePageCommand);
-
-                byte[] bytes = ScryberReportEngine.RenderWithLayoutRenderer(template, reportData, renderer);
-                if (bytes == null || bytes.Length == 0)
-                    return null;
-
-                return new PrintJob
-                {
-                    Name = aCClassDesign.ACIdentifier,
-                    Main = bytes,
-                    Encoding = encoding,
-                    ColumnMultiplier = 1,
-                    ColumnDivisor = 1,
-                };
-            }
-            catch (Exception e)
-            {
-                Messages.LogException(GetACUrl(), nameof(TryCreateScryberCustomPrintJob), e);
-                return null;
-            }
-        }
 
         private Encoding ResolveEncoding()
         {
@@ -433,7 +387,7 @@ namespace escpos.core.reporthandlerwpf
                 if (inlineBarcode.GS1Model != null && inlineBarcode.GS1Model.IsGs1 && !string.IsNullOrEmpty(inlineBarcode.GS1Model.EscPosPayload))
                 {
                     byte[] barcodeRaster = 
-                    Gs1Code128Raster.FromInputToRasterFit(
+                    Gs1Code128RasterX.FromInputToRasterFit(
                         fields: inlineBarcode.GS1Model.Items,
                         desiredWidthDots: inlineBarcode.ESCDesiredWidthDots,
                         heightPx: inlineBarcode.ESCHeightPx,
